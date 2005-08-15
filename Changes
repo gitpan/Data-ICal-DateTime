@@ -1,2 +1,9 @@
+0.2 - Mon Aug 15 10:36:01 BST 2005
+    * More support for timezones
+    * Note some todos
+    * Fix a bug with premature truncation of RRULEs
+    * Added EXRULE, EXDATE and RDATE support - we 
+      can now parse London.pm's insane meeting shcedule. YAY!
+
 0.1 - Tue Aug  9 09:44:22 BST 2005
     * initial release

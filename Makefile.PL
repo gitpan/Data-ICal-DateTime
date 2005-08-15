@@ -13,6 +13,6 @@ requires('Class::Accessor');
 requires('Data::ICal','0.02');
 requires('DateTime::Set');
 requires('DateTime::Format::ICal');
-requires('DateTime::Event::Recurrence');
+# requires('DateTime::Event::Recurrence','0.17');
 
 &WriteAll;

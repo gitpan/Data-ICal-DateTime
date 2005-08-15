@@ -1,0 +1,6 @@
+try
+.tar.gz
+Makefile
+Makefile.old
+.svn
+blib

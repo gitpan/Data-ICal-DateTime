@@ -5,9 +5,8 @@ use Clone;
 use Data::ICal;
 use DateTime::Set;
 use DateTime::Format::ICal;
-use DateTime::Event::Recurrence;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 
 # mmm, mixin goodness
 sub import {
@@ -15,7 +14,9 @@ sub import {
     no strict 'refs';
     no warnings 'redefine';
     *Data::ICal::events = \&events;
-    foreach my $sub (qw(start end duration period summary description recurrence explode is_in _normalise)) {
+    foreach my $sub (qw(start end duration period summary description recurrence 
+                        rdate exrule exdate _rule_set _date_set explode is_in _normalise)) 
+    {
         *{"Data::ICal::Entry::Event::$sub"} = \&$sub;
     }
     push @Data::ICal::Entry::Event::ISA, 'Clone';
@@ -133,10 +134,9 @@ sub start {
 
 
     my $dtstart = $self->property('dtstart') || return undef;
+    my $ret     = DateTime::Format::ICal->parse_datetime($dtstart->[0]->value);
 
-    my $ret = DateTime::Format::ICal->parse_datetime($dtstart->[0]->value);
-
-    # $ret->set_time_zone($dtstart->[0]->parameters->{TZID}) if $dtstart->[0]->parameters->{TZID};
+    $ret->set_time_zone($dtstart->[0]->parameters->{TZID}) if $dtstart->[0]->parameters->{TZID};
 
     return $ret;
 
@@ -164,10 +164,10 @@ sub end {
     }
 
 
-    my $dtend = $self->property('dtend') || return undef;
-    my $ret   = DateTime::Format::ICal->parse_datetime($dtend->[0]->value);
+    my $dtend  = $self->property('dtend') || return undef;
+    my $ret    = DateTime::Format::ICal->parse_datetime($dtend->[0]->value);
 
-    # $ret->set_time_zone($dtend->[0]->parameters->{TZID}) if ($dtend->[0]->parameters->{TZID});
+    $ret->set_time_zone($dtend->[0]->parameters->{TZID}) if ($dtend->[0]->parameters->{TZID});
     # iCal represents all-day events by using ;VALUE=DATE and setting DTEND=end_date + 1
     $ret->subtract( days => 1 ) if $dtend->[0]->parameters->{VALUE} && $dtend->[0]->parameters->{VALUE} eq 'DATE';
     return $ret;
@@ -221,10 +221,10 @@ sub period {
         $self->add_property( period => DateTime::Format::ICal->format_period($new) );
     }
 
-    my $period = $self->property('period') || return undef;
-    my $ret = DateTime::Format::ICal->parse_period($period->[0]->value);
+    my $period  = $self->property('period') || return undef;
+    my $ret     = DateTime::Format::ICal->parse_period($period->[0]->value);
 
-    # $ret->set_time_zone($period->[0]->parameters->{TZID}) if ($period->[0]->parameters->{TZID});
+    $ret->set_time_zone($period->[0]->parameters->{TZID}) if ($period->[0]->parameters->{TZID});
     return $ret;
 }
 
@@ -245,24 +245,107 @@ sub recurrence {
     my $self = shift;
     
 
+    return $self->_rule_set('rrule');
+}
+
+=head2 rdate
+
+Returns a L<DateTime::Set> object representing the set of all C<RDATE>s in the object.
+
+May return undef.
+
+=cut
+
+sub rdate {
+    my $self = shift;
+
+    return $self->_date_set('rdate');
+}
+
+
+=head2 exrule
+
+Returns a L<DateTime::Set> object representing the union of all the
+C<EXRULE>s in this object.
+
+May return undef.
+
+If passed one or more L<DateTime> lists, L<DateTime::Span> lists, L<DateTime::Set>s,
+or L<DateTime::SpanSet>s then set the recurrence rules to be those.
+
+=cut
+
+
+sub exrule {
+    my $self = shift;
+
+    return $self->_rule_set('exrule');
+
+}
+
+=head2 exdate
+
+Returns a L<DateTime::Set> object representing the set of all C<RDATE>s in the object.
+
+May return undef.
+
+=cut
+
+sub exdate {
+    my $self = shift;
+
+    return $self->_date_set('exdate');
+}
+
+
+
+sub _date_set {
+    my $self = shift;
+    my $name = shift;
+
+
+    $self->property($name) || return undef;
+    my @dates;
+    for (@{ $self->property($name) }) {
+        my $date     = DateTime::Format::ICal->parse_datetime($_->value);
+        $date->set_time_zone($_->parameters->{TZID}) if $_->parameters->{TZID};
+        push @dates, $date;
+    }
+    return DateTime::Set->from_datetimes( dates => \@dates );
+
+}
+
+ 
+sub _rule_set {
+    my $self  = shift;
+    my $name  = shift;
+
     if (@_) {
-        delete $self->{properties}->{rrule};
-        $self->add_properties( rrule => DateTime::Format::ICal->format_recurrence(@_) );
+        delete $self->{properties}->{$name};
+        $self->add_properties( $name => DateTime::Format::ICal->format_recurrence(@_) );
     }
 
 
     my @recurrence;
     my $start = $self->start || return undef;
+    my $tz    = $start->time_zone;
+
+    $start = $start->clone;
+    $start->set_time_zone("floating");
+
     my $set = DateTime::Set->empty_set;
-    $self->property('rrule') || return undef;
-    for (@{ $self->property('rrule') }) {
-        my $recur = DateTime::Format::ICal->parse_recurrence(recurrence => $_->value, dtstart => $start);
+    $self->property($name) || return undef;
+    for (@{ $self->property($name) }) {
+        my $recur   = DateTime::Format::ICal->parse_recurrence(recurrence => $_->value, dtstart => $start);
+        $recur->set_time_zone($_->parameters->{TZID}) if $_->parameters->{TZID};
         $set = $set->union($recur);
     }
-    #$set->set_time_zone($self->property('rrule')->[0]->parameters->{TZID}) 
-    #        if ($self->property('rrule')->[0]->parameters->{TZID});
+    # $set->set_time_zone($tz);
     return $set;
+
+
 }
+
 
 
 =head2 summary
@@ -343,9 +426,9 @@ sub explode {
 
     my @events;
 
-    if (! $e{recur} && !defined $period && $span->intersects($e{span}) ) {
+    if (! $e{recur} && !defined $period && $e{span}->intersects($span) ) {
         my $event = $self->clone();
-        delete $event->{properties}->{$_} for qw(rrule duration period);
+        delete $event->{properties}->{$_} for qw(rrule exrule rdate exdate duration period);
         $event->start($e{start});
         $event->end($e{end});
         push @events, $event;
@@ -360,7 +443,7 @@ sub explode {
 
     }
 
-
+    $e{recur} = $e{recur}->union($e{rdate}) if $e{rdate};
 
     if($e{recur} && $e{recur}->intersects($span)) {
         my $int_set = $e{recur}->intersection($span);
@@ -369,19 +452,19 @@ sub explode {
         # Change the event's recurrence details so that only the events
         # inside the time span we're interested in are listed.
         $e{recur} = $int_set;
-        my $iter = $int_set->iterator();
-      
 
-        while(my $dt = $iter->next()) {
+        while(my $dt = $int_set->next()) {
+            next if $e{exrule} && $e{exrule}->contains($dt);
+            next if $e{exdate} && $e{exdate}->contains($dt);            
             my $event = $self->clone();
-            delete $event->{properties}->{$_} for qw(rrule duration period);
+            delete $event->{properties}->{$_} for qw(rrule exrule rdate exdate duration period);
 
             $event->start($dt);
+            my $end = $dt + $e{duration};
             # If, say we have a one week and 1 day event and period is  
             # 'week' then need to truncate to one 1 week event and one
             # day event. 
-            my $end = $dt + $e{duration};
-            $end = $e{end} if $e{end} < $end;
+            $end = $e{end} if ( defined $period && $e{end} < $end);
             $event->end($end);
             push @events, $event;
         }
@@ -419,7 +502,9 @@ sub _normalise {
     $e{end}      = $self->end;
     $e{duration} = $self->duration;
     $e{recur}    = $self->recurrence;
-
+    $e{exrule}   = $self->exrule;
+    $e{rdate}    = $self->rdate;
+    $e{exdate}   = $self->exdate;
 
     
     if (defined $e{period}) {
@@ -435,7 +520,7 @@ sub _normalise {
 
 
     if (!defined $e{start}) {
-        die "Couldn't find start - perhaps this is in exrule:\n".$self->as_string;
+        die "Couldn't find start\n".$self->as_string;
     }
 
     if (defined $e{end} && defined $e{duration}) {
@@ -471,7 +556,13 @@ Distributed under the same terms as Perl itself.
 
 =head1 BUGS
 
-None known.
+Potential timezone problems?
+
+No tests for 
+
+    EXRULE
+    EXDATE
+    RDATE
 
 =head1 SEE ALSO
 
