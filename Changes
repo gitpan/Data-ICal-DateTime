@@ -1,3 +1,6 @@
+0.3 - Wed Aug 17 11:52:24 BST 2005
+    * match Data::ICal 0.03 API change
+
 0.2 - Mon Aug 15 10:36:01 BST 2005
     * More support for timezones
     * Note some todos

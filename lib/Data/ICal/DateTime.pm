@@ -6,7 +6,7 @@ use Data::ICal;
 use DateTime::Set;
 use DateTime::Format::ICal;
 
-our $VERSION = '0.2';
+our $VERSION = '0.3';
 
 # mmm, mixin goodness
 sub import {
@@ -32,7 +32,7 @@ Data::ICal::DateTime - convenience methods for using Data::ICal with DateTime
 
     # performs mixin voodoo
     use Data::ICal::DateTime; 
-    my $cal = Data::ICal->new('example.ics');
+    my $cal = Data::ICal->new( filename => 'example.ics');
 
 
     my $date1 = DateTime->new( year => 2005, month => 7, day => 01 );
@@ -58,6 +58,10 @@ Data::ICal::DateTime - convenience methods for using Data::ICal with DateTime
     $event->end;                           # ditto
     $event->duration;                      # returns a DateTime::Duration
     $event->recurrence;                    # returns a DateTime::Set
+    $event->period;                        # returns a DateTime::Span object
+    $event->rdate;                         # returns a DateTime::Set
+    $event->exrule;                        # returns a DateTime::Set
+    $event->exdate;                        # returns a DateTime::Set
     $event->explode($span);                # returns an array of sub events
                                            # (if this is recurring);
     $event->explode($span,'week');         # if any events are longer than a 
@@ -67,6 +71,8 @@ Data::ICal::DateTime - convenience methods for using Data::ICal with DateTime
 
 
     $cal->add($event);
+
+methods
 
 
 =head1 DESCRIPTION
@@ -352,6 +358,14 @@ sub _rule_set {
 
 Returns a string representing the summary of this event.
 
+This string may contain embedded new lines and other escaped characters.
+
+It may be useful to do
+
+    my $summ = $event->summary || '';
+    evel "\$summ = \"$summ\";";
+
+
 May return undef.
 
 =cut 
@@ -372,6 +386,14 @@ sub summary {
 =head2 description
 
 Returns a string representing the summary of this event.
+
+This string may contain embedded new lines and other escaped characters.
+
+It may be useful to do
+
+    my $desc = $event->description || '';
+    evel "\$desc = \"$desc\";";
+
 
 May return undef.
 

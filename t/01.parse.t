@@ -16,7 +16,7 @@ for (qw(start end duration summary description recurrence explode is_in _normali
 
 
 my $cal;
-ok($cal = Data::ICal->new('t/ics/test.ics'), "parse test ics");
+ok($cal = Data::ICal->new( filename => 't/ics/test.ics'), "parse test ics");
 
 
 my $date1 = DateTime->new( year => 2005, month => 6, day => 27 );
