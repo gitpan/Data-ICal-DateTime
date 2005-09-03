@@ -59,7 +59,7 @@ for (@events) {
 
 
 @events = $cal->events($set,'day');
-is(@events, 36, "36 events if you explode multi day events to multiple single day events");
+is(@events, 41, "41 events if you explode multi day events to multiple single day events");
 
 ok($orig_norm, "Found normal event");
 ok($orig_recur, "Found recurring event");

@@ -1,3 +1,8 @@
+0.4 - Sat Sep  3 10:10:06 BST 2005
+    * Add recurrence-id support for event updates
+    * Add all_day and uid methods
+    * Make sure that recurring events get exploded
+
 0.3 - Wed Aug 17 11:52:24 BST 2005
     * match Data::ICal 0.03 API change
 

@@ -12,7 +12,11 @@ MANIFEST			This list of files
 MANIFEST.SKIP
 t/00.load.t
 t/01.parse.t
+t/02.complicated.t
+t/03.recurrence-id.t
 t/ics/test.ics
+t/ics/meeting.ics
+t/ics/recurrence-id.ics
 t/pod-coverage.t
 t/pod.t
 Changes

@@ -6,7 +6,7 @@ use Data::ICal;
 use DateTime::Set;
 use DateTime::Format::ICal;
 
-our $VERSION = '0.3';
+our $VERSION = '0.4';
 
 # mmm, mixin goodness
 sub import {
@@ -14,8 +14,9 @@ sub import {
     no strict 'refs';
     no warnings 'redefine';
     *Data::ICal::events = \&events;
-    foreach my $sub (qw(start end duration period summary description recurrence 
-                        rdate exrule exdate _rule_set _date_set explode is_in _normalise)) 
+    foreach my $sub (qw(start end duration period summary description 
+                        all_day recurrence recurrence_id rdate exrule exdate uid 
+                        _rule_set _date_set explode is_in _normalise)) 
     {
         *{"Data::ICal::Entry::Event::$sub"} = \&$sub;
     }
@@ -109,12 +110,24 @@ sub events {
     # NOTE: this won't normalise events   
     return grep  { $_->ical_entry_type eq 'VEVENT' } @{$self->entries} if (!@_);
 
-    my @events;
-    for (@{$self->entries}) {
+    my %rid;
+    ENTRY: for (@{$self->entries}) {
         next unless $_->ical_entry_type eq 'VEVENT';
-        push @events, $_->explode(@_);
+        if ($_->recurrence_id){
+            foreach my $exploded ($_->explode(@_)) {
+                my $uid = $exploded->uid; $uid = rand().{}.time unless defined $uid;
+                foreach my $e (@{$rid{$uid}}) {
+                    next unless $e->start == $exploded->recurrence_id;
+                    $e = $exploded;
+                }
+            }            
+            next ENTRY;
+        }
+        my $uid = $_->uid; $uid = rand().{}.time unless defined $uid;
+        push @{$rid{$uid}}, $_->explode(@_);
     }
-
+    my @events;
+    push @events, @$_ for values %rid; 
     return @events;
 }
 
@@ -142,7 +155,7 @@ sub start {
     my $dtstart = $self->property('dtstart') || return undef;
     my $ret     = DateTime::Format::ICal->parse_datetime($dtstart->[0]->value);
 
-    $ret->set_time_zone($dtstart->[0]->parameters->{TZID}) if $dtstart->[0]->parameters->{TZID};
+    # $ret->set_time_zone($dtstart->[0]->parameters->{TZID}) if $dtstart->[0]->parameters->{TZID};
 
     return $ret;
 
@@ -163,20 +176,40 @@ sub end {
     my $self = shift;
     my $new  = shift;
 
+    # iCal represents all-day events by using ;VALUE=DATE 
+    # and setting DTEND=end_date + 1
+
     if ($new) {
+         my $all_day = $self->all_day;
          delete $self->{properties}->{dtend};
-         # TODO: if it's an all day event do we need to add ;VALUE=DATE 
+         # $new->add( days => 1) if $all_day;              
          $self->add_property( dtend => DateTime::Format::ICal->format_datetime($new) );
+         # $self->property('dtend')->[0]->parameters->{VALUE} = 'DATE' if $all_day;
+
     }
 
 
     my $dtend  = $self->property('dtend') || return undef;
     my $ret    = DateTime::Format::ICal->parse_datetime($dtend->[0]->value);
 
-    $ret->set_time_zone($dtend->[0]->parameters->{TZID}) if ($dtend->[0]->parameters->{TZID});
-    # iCal represents all-day events by using ;VALUE=DATE and setting DTEND=end_date + 1
-    $ret->subtract( days => 1 ) if $dtend->[0]->parameters->{VALUE} && $dtend->[0]->parameters->{VALUE} eq 'DATE';
+    # $ret->set_time_zone($dtend->[0]->parameters->{TZID}) if ($dtend->[0]->parameters->{TZID});
+    # $ret->subtract( days => 1 ) if $dtend->[0]->parameters->{VALUE} && $dtend->[0]->parameters->{VALUE} eq 'DATE';
+
     return $ret;
+}
+
+=head2 all_day
+
+Returns 1 if event is all day or 0 if not.
+
+=cut
+
+sub all_day {
+    my $self = shift;
+    my $new  = shift;
+
+    my $dtend  = $self->property('dtend') || return 0;
+    return $dtend->[0]->parameters->{VALUE} && $dtend->[0]->parameters->{VALUE} eq 'DATE';
 }
 
 =head2 duration
@@ -230,7 +263,7 @@ sub period {
     my $period  = $self->property('period') || return undef;
     my $ret     = DateTime::Format::ICal->parse_period($period->[0]->value);
 
-    $ret->set_time_zone($period->[0]->parameters->{TZID}) if ($period->[0]->parameters->{TZID});
+    # $ret->set_time_zone($period->[0]->parameters->{TZID}) if ($period->[0]->parameters->{TZID});
     return $ret;
 }
 
@@ -314,7 +347,7 @@ sub _date_set {
     my @dates;
     for (@{ $self->property($name) }) {
         my $date     = DateTime::Format::ICal->parse_datetime($_->value);
-        $date->set_time_zone($_->parameters->{TZID}) if $_->parameters->{TZID};
+        # $date->set_time_zone($_->parameters->{TZID}) if $_->parameters->{TZID};
         push @dates, $date;
     }
     return DateTime::Set->from_datetimes( dates => \@dates );
@@ -343,7 +376,7 @@ sub _rule_set {
     $self->property($name) || return undef;
     for (@{ $self->property($name) }) {
         my $recur   = DateTime::Format::ICal->parse_recurrence(recurrence => $_->value, dtstart => $start);
-        $recur->set_time_zone($_->parameters->{TZID}) if $_->parameters->{TZID};
+        # $recur->set_time_zone($_->parameters->{TZID}) if $_->parameters->{TZID};
         $set = $set->union($recur);
     }
     # $set->set_time_zone($tz);
@@ -352,7 +385,55 @@ sub _rule_set {
 
 }
 
+=head2 recurrence_id
 
+Returns a L<DateTime> object representing the recurrence-id of this event.
+
+May return undef.
+
+If passed a L<DateTime> object will set that to be the new recurrence-id.
+
+=cut
+
+sub recurrence_id {
+    my $self = shift;
+    my $new  = shift; 
+
+    if ($new) {
+         delete $self->{properties}->{'recurrence-id'};
+         $self->add_property('recurrence-id' => DateTime::Format::ICal->format_datetime($new));
+    }
+
+
+    my $rid  = $self->property('recurrence-id') || return undef;
+    my $ret  = DateTime::Format::ICal->parse_datetime($rid->[0]->value);
+
+    # $ret->set_time_zone($rid->[0]->parameters->{TZID}) if $rid->[0]->parameters->{TZID};
+
+    return $ret;
+
+}
+
+=head2 uid
+
+Returns the uid of this event.
+
+If passed a new value then sets that to be the new uid value. 
+
+=cut
+
+sub uid {
+    my $self = shift;
+    my $uid  = shift;
+
+    if ($uid) {
+        delete $self->{properties}->{uid};
+        $self->add_property( uid => $uid );
+    }
+
+    $uid = $self->property('uid') || return undef;
+    return $uid->[0]->value;
+}
 
 =head2 summary
 
@@ -448,24 +529,14 @@ sub explode {
 
     my @events;
 
-    if (! $e{recur} && !defined $period && $e{span}->intersects($span) ) {
+    if (! $e{recur} && $e{span}->intersects($span) ) {
         my $event = $self->clone();
         delete $event->{properties}->{$_} for qw(rrule exrule rdate exdate duration period);
         $event->start($e{start});
         $event->end($e{end});
         push @events, $event;
-    } elsif(!$e{recur} && defined $period) {
-        $e{recur} = DateTime::Set->from_recurrence(
-                                       recurrence => sub {
-                                         $_[0]->truncate(to => $period )->add("${period}s" => 1);
-                                       },
-                                       span => $e{span});
-        $e{recur} = $e{recur}->union(DateTime::Set->from_datetimes(dates => [$e{start}]));
-        $e{duration}  =  DateTime::Duration->new("${period}s" => 1)->subtract( "nanoseconds" => 1);
-
     }
 
-    $e{recur} = $e{recur}->union($e{rdate}) if $e{rdate};
 
     if($e{recur} && $e{recur}->intersects($span)) {
         my $int_set = $e{recur}->intersection($span);
@@ -474,8 +545,8 @@ sub explode {
         # Change the event's recurrence details so that only the events
         # inside the time span we're interested in are listed.
         $e{recur} = $int_set;
-
-        while(my $dt = $int_set->next()) {
+        my $it    = $e{recur}->iterator;
+        while(my $dt = $it->next()) {
             next if $e{exrule} && $e{exrule}->contains($dt);
             next if $e{exdate} && $e{exdate}->contains($dt);            
             my $event = $self->clone();
@@ -483,15 +554,42 @@ sub explode {
 
             $event->start($dt);
             my $end = $dt + $e{duration};
-            # If, say we have a one week and 1 day event and period is  
-            # 'week' then need to truncate to one 1 week event and one
-            # day event. 
-            $end = $e{end} if ( defined $period && $e{end} < $end);
             $event->end($end);
             push @events, $event;
         }
     }
-    return @events;
+    return @events if !defined $period;
+
+
+    my @new;
+    foreach my $event (@events) {
+        my $span = DateTime::Span->from_datetimes( start => $event->start, end => $event->end );
+        my $dur  = DateTime::Duration->new("${period}s" => 1)->subtract( "nanoseconds" => 1 );
+        my $r    = DateTime::Set->from_recurrence(
+                                       recurrence => sub {
+                                         $_[0]->truncate(to => $period )->add("${period}s" => 1);
+                                       },
+                                       span => $span);
+        $r       = $r->union(DateTime::Set->from_datetimes(dates => [$event->start]));
+
+        my $i    = $r->iterator;
+        while (my $dt = $i->next) {
+            my $e = $event->clone;
+            $e->start($dt);
+            my $end = $dt->add( days => 1);
+            $end->set ( hour => 0, minute => 0, second => 0, nanosecond => 0);
+            $end = $end->subtract( nanoseconds => 1 );
+            
+            $e->end($end);
+            push @new, $e;
+        }
+        # If, say we have a one week and 1 day event and period is  
+        # 'week' then need to truncate to one 1 week event and one
+        # day event. 
+        # $end = $e{end} if ( defined $period && $e{end} < $end);
+        $new[-1]->end($event->end);
+    }
+    return @new;
 }
 
 =head2 is_in <span>
@@ -556,6 +654,9 @@ sub _normalise {
         $e{end} = $e{start} + $e{duration};
     }
 
+    if ($e{rdate}) {
+        $e{recur} = (defined $e{recur}) ? $e{recur}->union($e{rdate}) : $e{rdate};
+    }
 
 
     $e{span}     = DateTime::Span->from_datetimes( start => $e{start}, end => $e{end} );
@@ -580,15 +681,13 @@ Distributed under the same terms as Perl itself.
 
 Potential timezone problems?
 
-No tests for 
+Exploding to a second or nanosecond might not work properly.
 
-    EXRULE
-    EXDATE
-    RDATE
+Some shennanigans with all day events
 
 =head1 SEE ALSO
 
-L<DateTime>, L<DateTime::Set>, L<Data::ICal>, L<Text::vFile::asData>
+L<DateTime>, L<DateTime::Set>, L<Data::ICal>, L<Text::vFile::asData>, L<iCal::Parser> 
 
 =cut
 
