@@ -59,7 +59,7 @@ for (@events) {
 
 
 @events = $cal->events($set,'day');
-is(@events, 41, "41 events if you explode multi day events to multiple single day events");
+is(@events, 36, "36 events if you explode multi day events to multiple single day events");
 
 ok($orig_norm, "Found normal event");
 ok($orig_recur, "Found recurring event");
@@ -77,4 +77,3 @@ ok($orig_recur->recurrence,"Got a recurrence in the normal one");
 ok(!$munged_recur->recurrence,"Not got a recurrence in the munged one");
 ok($munged_recur->end,"Got an end in the munged one");
 
-# TODO: test period and also setting of properties
