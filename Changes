@@ -1,3 +1,9 @@
+0.6 -Tue Sep 20 12:40:43 BST 2005
+    * Make setting of recurrence work
+    * Add reference to original untainted object
+    * Expose split_up method 
+    * Escape and Unescape summary and description
+
 0.5 - Wed Sep  7 17:58:07 BST 2005
     * Tests (and setting) for all_day 
     * Fix all day events

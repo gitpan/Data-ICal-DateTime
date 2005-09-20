@@ -1,7 +1,7 @@
 use strict;
 
 
-use Test::More tests => 16;
+use Test::More tests => 21;
 
 
 use Data::ICal::DateTime;
@@ -43,3 +43,17 @@ $e2->all_day(1);
 is($e2->all_day, 1,  "E2 is now all day again ");
 is("".$e2->end, "".$date2, "E2's end is the correct new date");
 	
+$e1->end($date1);
+$e2->end($date1);
+
+my @e1 = $e1->split_up('hour');
+my @e2 = $e2->split_up('hour');
+
+# I did think about making exploded events where period >= day to be all day 
+# if appropriate but decided against it and went with the original() idea instead
+is(@e1, 14, "e1 14 exploded");
+is(@e2, 14, "e2 14 exploded");
+is($e1[0]->all_day, 0, "e1 exploded is not all day");
+is($e2[0]->all_day, 0, "e2 exploded is not all day");
+is($e2[0]->original->all_day, 1, "e2 exploded original *is* all day");
+

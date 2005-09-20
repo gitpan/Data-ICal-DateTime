@@ -6,7 +6,7 @@ use Data::ICal;
 use DateTime::Set;
 use DateTime::Format::ICal;
 
-our $VERSION = '0.5';
+our $VERSION = '0.6';
 
 # mmm, mixin goodness
 sub import {
@@ -14,9 +14,9 @@ sub import {
     no strict 'refs';
     no warnings 'redefine';
     *Data::ICal::events = \&events;
-    foreach my $sub (qw(start end duration period summary description 
+    foreach my $sub (qw(start end duration period summary description original
                         all_day recurrence recurrence_id rdate exrule exdate uid 
-                        _rule_set _date_set explode is_in _normalise _split_up)) 
+                        _rule_set _date_set explode is_in _normalise split_up _escape _unescape)) 
     {
         *{"Data::ICal::Entry::Event::$sub"} = \&$sub;
     }
@@ -135,7 +135,7 @@ sub events {
         if (!defined $period) {
             push @events, @$_;
         } else {
-            push @events, map { $_->_split_up($period) } @$_;
+            push @events, map { $_->split_up($period) } @$_;
         }
     }
     return @events;
@@ -310,7 +310,7 @@ sub recurrence {
     my $self = shift;
     
 
-    return $self->_rule_set('rrule');
+    return $self->_rule_set('rrule', @_);
 }
 
 =head2 rdate
@@ -324,7 +324,7 @@ May return undef.
 sub rdate {
     my $self = shift;
 
-    return $self->_date_set('rdate');
+    return $self->_date_set('rdate', @_);
 }
 
 
@@ -344,7 +344,7 @@ or L<DateTime::SpanSet>s then set the recurrence rules to be those.
 sub exrule {
     my $self = shift;
 
-    return $self->_rule_set('exrule');
+    return $self->_rule_set('exrule', @_);
 
 }
 
@@ -359,7 +359,7 @@ May return undef.
 sub exdate {
     my $self = shift;
 
-    return $self->_date_set('exdate');
+    return $self->_date_set('exdate', @_);
 }
 
 
@@ -387,7 +387,11 @@ sub _rule_set {
 
     if (@_) {
         delete $self->{properties}->{$name};
-        $self->add_properties( $name => DateTime::Format::ICal->format_recurrence(@_) );
+		foreach my $rule (DateTime::Format::ICal->format_recurrence(@_)) {
+			#$rule =~ s!^$name:!!i;
+			$rule =~ s!^[^:]+:!!;
+	        $self->add_properties( $name => $rule  );
+		}
     }
 
 
@@ -459,19 +463,12 @@ sub uid {
 
     $uid = $self->property('uid') || return undef;
     return $uid->[0]->value;
+
 }
 
 =head2 summary
 
 Returns a string representing the summary of this event.
-
-This string may contain embedded new lines and other escaped characters.
-
-It may be useful to do
-
-    my $summ = $event->summary || '';
-    evel "\$summ = \"$summ\";";
-
 
 May return undef.
 
@@ -483,24 +480,16 @@ sub summary {
 
     if ($summ) {
         delete $self->{properties}->{summary};
-        $self->add_property( summary => $summ );
+        $self->add_property( summary => _escape($summ) );
     }
 
     $summ = $self->property('summary') || return undef;
-    return $summ->[0]->value;
+    return _unescape($summ->[0]->value);
 }
 
 =head2 description
 
 Returns a string representing the summary of this event.
-
-This string may contain embedded new lines and other escaped characters.
-
-It may be useful to do
-
-    my $desc = $event->description || '';
-    evel "\$desc = \"$desc\";";
-
 
 May return undef.
 
@@ -513,13 +502,28 @@ sub description {
 
     if ($desc) {
         delete $self->{properties}->{description};
-        $self->add_property( description => $desc );
+        $self->add_property( description => _escape($desc) );
     }
  
     $desc = $self->property('description') || return undef;
-    return $desc->[0]->value;
+    return _unescape($desc->[0]->value);
+
 }
 
+
+sub _escape {
+    my $string = shift;
+    $string =~ s!(\\|,|;)!\\$1!mg;
+    $string =~ s!\x0a!\\n!mg;
+    return $string;
+}
+
+sub _unescape {
+    my $string = shift;
+    $string =~ s!\\n!\x0a!gm;
+    $string =~ s!(\\\\|\\,|\\;)!substr($1,-1)!gem;
+    return $string;
+}
 
 
 =head2 explode <span> [period]
@@ -584,16 +588,39 @@ sub explode {
             $event->start($dt);
             my $end = $dt + $e{duration};
             $event->end($end);
-            push @events, $event;
-        }
+    		$event->all_day($self->all_day);
+			$event->original($self);
+	        push @events, $event;
+    
+	    }
     }
-     return @events if (!defined $period);
+    return @events if (!defined $period);
     my @new;
-    push @new, $_->_split_up($period) for @events;
+    push @new, $_->split_up($period) for @events;
     return @new;
 }
 
-sub _split_up {
+=head2 original <event>
+
+Store or fetch a reference to the original event this was derived from.
+
+=cut 
+
+sub original {
+	my $self = shift;
+
+	$self->{_original} = $_[0] if @_;
+
+	return $self->{_original};
+}
+
+=head2 split_up <period>
+
+Split an n-period event into n 1-period events.
+
+=cut
+
+sub split_up {
     my $event  = shift;
     my $period = shift;
 
@@ -609,11 +636,13 @@ sub _split_up {
     $r       = $r->union(DateTime::Set->from_datetimes(dates => [$event->start]));
 
     my $i    = $r->iterator;
-    while (my $dt = $i->next) {    
-        last if $dt == $event->end; # && !$event->all_day;
+    while (my $dt = $i->next) {
+        last if $dt >= $event->end; # && !$event->all_day;
         my $e = $event->clone;
         $e->start($dt);
 		$e->all_day(0);
+		$e->original($event);
+		# $e->all_day($event->all_day) if $period ne 'second' && $period ne 'minute' && $period ne 'day';
 
         my $end = $dt->truncate( to => $period )->add( "${period}s" => 1 )->subtract( nanoseconds => 1 );        
         $e->end($end);
