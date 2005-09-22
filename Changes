@@ -1,4 +1,7 @@
-0.6 -Tue Sep 20 12:40:43 BST 2005
+0.61 - Wed Sep 21 17:48:36 BST 2005
+    * Make Clone a prereq
+
+0.6 - Tue Sep 20 12:40:43 BST 2005
     * Make setting of recurrence work
     * Add reference to original untainted object
     * Expose split_up method 

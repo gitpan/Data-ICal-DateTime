@@ -11,6 +11,7 @@ build_requires('Test::NoWarnings');
 build_requires('Test::LongString');
 requires('Class::Accessor');
 requires('Data::ICal','0.03');
+requires('Clone');
 requires('DateTime::Set');
 requires('DateTime::Format::ICal');
 # requires('DateTime::Event::Recurrence','0.17');
