@@ -6,7 +6,7 @@ use Data::ICal;
 use DateTime::Set;
 use DateTime::Format::ICal;
 
-our $VERSION = '0.61';
+our $VERSION = '0.62';
 
 # mmm, mixin goodness
 sub import {
@@ -189,13 +189,28 @@ sub end {
     # iCal represents all-day events by using ;VALUE=DATE 
     # and setting DTEND=end_date + 1
     my $all_day = $self->all_day;
+
+
+    # TODO: 
+    # hack to make Palm floating events work
+    # these don't have a DTEND but have VALUE=DATE on DTSTART
+    # we should probably have an 'is_floating' property
+    if (! $self->property('dtend') && !$self->duration && !$new ) {
+        my $s    = $self->property('dtstart');
+        return undef unless ($s->[0]->parameters->{VALUE} && $s->[0]->parameters->{VALUE} eq 'DATE');
+        $new     = $self->start;
+        $all_day = 1;
+    }
+
+
+
     if ($new) {
          delete $self->{properties}->{dtend};
          my $update = $new->clone; 
-		 if ($all_day) {              
-	         $update->add( days => 1); 
-			 $update->set( hour => 0, minute => 0, second => 0 );
-		 }
+         if ($all_day) {              
+             $update->add( days => 1); 
+             $update->set( hour => 0, minute => 0, second => 0 );
+         }
          $self->add_property( dtend => DateTime::Format::ICal->format_datetime($update) );
          $self->property('dtend')->[0]->parameters->{VALUE} = 'DATE' if $all_day;
 
@@ -215,14 +230,26 @@ sub end {
 
 Returns 1 if event is all day or 0 if not.
 
+If no end has been set and 1 is passed then will set end to be a 
+nanosecond before midnight the next day.
+
 =cut
 
 sub all_day {
     my $self = shift;
     my $new  = shift;
 
-    my $dtend  = $self->property('dtend') || return 0;
-      my $cur    = (defined $dtend->[0]->parameters->{VALUE} && $dtend->[0]->parameters->{VALUE} eq 'DATE') || 0;
+    # TODO - should be able to make all day with just the start
+    my $dtend  = $self->property('dtend');
+
+    if (!$dtend) {
+        return 0 unless $new;
+        $dtend = $self->start->clone->add( days => 1 )->truncate(to => 'day' )->subtract( nanoseconds => 1 );
+        $self->end($dtend);
+        $dtend  = $self->property('dtend');
+    }
+    
+    my $cur = (defined $dtend && defined $dtend->[0]->parameters->{VALUE} && $dtend->[0]->parameters->{VALUE} eq 'DATE') || 0;
 
     if (defined $new && $new != $cur) {
         my $end = $self->end;
@@ -336,7 +363,7 @@ C<EXRULE>s in this object.
 May return undef.
 
 If passed one or more L<DateTime> lists, L<DateTime::Span> lists, L<DateTime::Set>s,
-or L<DateTime::SpanSet>s then set the recurrence rules to be those.
+or L<DateTime::SpanSet>s then set the recurrence exclusion rules to be those.
 
 =cut
 
@@ -387,11 +414,11 @@ sub _rule_set {
 
     if (@_) {
         delete $self->{properties}->{$name};
-		foreach my $rule (DateTime::Format::ICal->format_recurrence(@_)) {
-			#$rule =~ s!^$name:!!i;
-			$rule =~ s!^[^:]+:!!;
-	        $self->add_properties( $name => $rule  );
-		}
+        foreach my $rule (DateTime::Format::ICal->format_recurrence(@_)) {
+            #$rule =~ s!^$name:!!i;
+            $rule =~ s!^[^:]+:!!;
+            $self->add_properties( $name => $rule  );
+        }
     }
 
 
@@ -472,6 +499,8 @@ Returns a string representing the summary of this event.
 
 May return undef.
 
+If passed a new value then sets that to be the new summary (and will escape all relevant characters).
+
 =cut 
 
 sub summary {
@@ -492,6 +521,8 @@ sub summary {
 Returns a string representing the summary of this event.
 
 May return undef.
+
+If passed a new value then sets that to be the new description (and will escape all relevant characters).
 
 =cut 
 
@@ -588,11 +619,11 @@ sub explode {
             $event->start($dt);
             my $end = $dt + $e{duration};
             $event->end($end);
-    		$event->all_day($self->all_day);
-			$event->original($self);
-	        push @events, $event;
+            $event->all_day($self->all_day);
+            $event->original($self);
+            push @events, $event;
     
-	    }
+        }
     }
     return @events if (!defined $period);
     my @new;
@@ -607,11 +638,11 @@ Store or fetch a reference to the original event this was derived from.
 =cut 
 
 sub original {
-	my $self = shift;
+    my $self = shift;
 
-	$self->{_original} = $_[0] if @_;
+    $self->{_original} = $_[0] if @_;
 
-	return $self->{_original};
+    return $self->{_original};
 }
 
 =head2 split_up <period>
@@ -640,9 +671,9 @@ sub split_up {
         last if $dt >= $event->end; # && !$event->all_day;
         my $e = $event->clone;
         $e->start($dt);
-		$e->all_day(0);
-		$e->original($event);
-		# $e->all_day($event->all_day) if $period ne 'second' && $period ne 'minute' && $period ne 'day';
+        $e->all_day(0);
+        $e->original($event);
+        # $e->all_day($event->all_day) if $period ne 'second' && $period ne 'minute' && $period ne 'day';
 
         my $end = $dt->truncate( to => $period )->add( "${period}s" => 1 )->subtract( nanoseconds => 1 );        
         $e->end($end);
@@ -675,7 +706,7 @@ sub is_in {
 
 }
 
-# return normalised informaiton about this event
+# return normalised information about this event
 sub _normalise {
     my $self = shift;
 
@@ -712,6 +743,8 @@ sub _normalise {
     if (defined $e{end} && defined $e{duration}) {
         die "Found both end *and* duration:\n".$self->as_string;
     }
+    
+
     if (!defined $e{end} && !defined $e{duration}) {
         die "Couldn't find end *or* duration:\n".$self->as_string;
     }

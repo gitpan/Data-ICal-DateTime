@@ -1,10 +1,11 @@
 use strict;
 
 
-use Test::More tests => 22;
+use Test::More tests => 24;
 
 
 use Data::ICal::DateTime;
+use Data::ICal::Entry::Event;
 use DateTime;
 use DateTime::Set;
 use DateTime::TimeZone;
@@ -56,3 +57,13 @@ is($e2[0]->all_day, 0, "e2 exploded is all day");
 is($e1[0]->original->all_day, 0, "e1 exploded wasn't originally all day");
 is($e2[0]->original->all_day, 1, "e2 exploded was originally all day");
 
+
+# test setting all day without end 
+my $new = Data::ICal::Entry::Event->new();
+
+my $new_date = $date1->clone->truncate( to => 'day' );
+$new->start($new_date);
+$new->all_day(1);
+
+is ($new->all_day, 1, "New is all day");
+is ("".$new->end, "".$date1, "New end is the same as start");
