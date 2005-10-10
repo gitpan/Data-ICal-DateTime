@@ -6,7 +6,7 @@ use Data::ICal;
 use DateTime::Set;
 use DateTime::Format::ICal;
 
-our $VERSION = '0.62';
+our $VERSION = '0.63';
 
 # mmm, mixin goodness
 sub import {
@@ -15,7 +15,7 @@ sub import {
     no warnings 'redefine';
     *Data::ICal::events = \&events;
     foreach my $sub (qw(start end duration period summary description original
-                        all_day recurrence recurrence_id rdate exrule exdate uid 
+                        all_day floating recurrence recurrence_id rdate exrule exdate uid 
                         _rule_set _date_set explode is_in _normalise split_up _escape _unescape)) 
     {
         *{"Data::ICal::Entry::Event::$sub"} = \&$sub;
@@ -190,20 +190,6 @@ sub end {
     # and setting DTEND=end_date + 1
     my $all_day = $self->all_day;
 
-
-    # TODO: 
-    # hack to make Palm floating events work
-    # these don't have a DTEND but have VALUE=DATE on DTSTART
-    # we should probably have an 'is_floating' property
-    if (! $self->property('dtend') && !$self->duration && !$new ) {
-        my $s    = $self->property('dtstart');
-        return undef unless ($s->[0]->parameters->{VALUE} && $s->[0]->parameters->{VALUE} eq 'DATE');
-        $new     = $self->start;
-        $all_day = 1;
-    }
-
-
-
     if ($new) {
          delete $self->{properties}->{dtend};
          my $update = $new->clone; 
@@ -265,6 +251,44 @@ sub all_day {
     return $cur;
 }
 
+=head2 floating
+
+An event is considered floating if it has a start but no end. It is intended 
+to represent an event that is associated with a given calendar date and time
+of day, such as an anniversary and should not be considered as taking up any
+amount of time.
+
+Returns 1 if the evnt is floating and 0 if it isn't.
+
+If passed a 1 then will set the event to be floating by deleting the end time.
+
+If passed a 0 and no end is currently set then it will set end to be a
+nanosecond before midnight the next day.
+
+=cut
+
+sub floating {
+    my $self = shift;
+    my $new  = shift;
+
+    my $end  = $self->end;
+    my $cur  = (defined $end)? 0 : 1;
+    if (defined $new && $new != $cur) {
+        # it is floating - delete the end
+        if ($new) {
+            delete $self->{properties}->{dtend};            
+        # it's not floating - simulate end as 1 nanosecond before midnight after the start
+        } else {
+            my $dtend = $self->start->clone->add( days => 1 )->truncate(to => 'day' )->subtract( nanoseconds => 1 );
+            $self->end($dtend);
+        }
+        $cur = $new;
+    }
+
+    return $cur;
+
+}
+
 =head2 duration
 
 Returns a L<DateTime::Duration> object representing the duration of this
@@ -274,7 +298,6 @@ May return undef.
 
 If passed a L<DateTime::Duration> object will set that to be the new 
 duration.
-
 
 =cut 
 
@@ -399,9 +422,11 @@ sub _date_set {
     $self->property($name) || return undef;
     my @dates;
     for (@{ $self->property($name) }) {
-        my $date     = DateTime::Format::ICal->parse_datetime($_->value);
-        # $date->set_time_zone($_->parameters->{TZID}) if $_->parameters->{TZID};
-        push @dates, $date;
+        foreach my $bit (split /,/, $_->value) {
+            my $date     = DateTime::Format::ICal->parse_datetime($bit);
+            # $date->set_time_zone($_->parameters->{TZID}) if $_->parameters->{TZID};
+            push @dates, $date;
+        }
     }
     return DateTime::Set->from_datetimes( dates => \@dates );
 
@@ -745,9 +770,10 @@ sub _normalise {
     }
     
 
-    if (!defined $e{end} && !defined $e{duration}) {
-        die "Couldn't find end *or* duration:\n".$self->as_string;
-    }
+    # events can be floating
+    #if (!defined $e{end} && !defined $e{duration}) {
+    #    die "Couldn't find end *or* duration:\n".$self->as_string;
+    #}
 
     if (defined $e{duration}) {
         $e{end} = $e{start} + $e{duration};
