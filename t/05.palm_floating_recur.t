@@ -11,16 +11,17 @@ use DateTime::Set;
 use DateTime::TimeZone;
 
 my $cal;
-ok($cal = Data::ICal->new( filename => 't/ics/palm.ics'), "parse palm ics");
+ok($cal = Data::ICal->new( filename => 't/ics/palm_recur.ics'), "parse palm recur ics");
 
-my $date1 = DateTime->new( year => 2005, month => 10, day => 3 );
+my $date1 = DateTime->new( year => 2005, month => 10, day => 4 );
 my $date2 = $date1->clone->add( days => 1 )->subtract( nanoseconds => 1 );
-my $span  = DateTime::Span->from_datetimes( start => $date1->clone->subtract(days => 2),
-                                             end   => $date1->clone->add(days => 2) );
+my $span  = DateTime::Span->from_datetimes( start => $date1,
+                                             end   => $date2 );
 
 
 my @events = $cal->events($span);
 use Data::Dumper;
+print Dumper(@events);
 is(scalar(@events),1,"1 event");
 
 my $ev = shift @events;

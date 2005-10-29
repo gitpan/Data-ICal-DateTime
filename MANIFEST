@@ -18,10 +18,12 @@ t/02.complicated.t
 t/03.recurrence-id.t
 t/04.all_day.t
 t/05.palm_floating.t
+t/05.palm_floating_recur.t
 t/ics/test.ics
 t/ics/all_day.ics
 t/ics/meeting.ics
 t/ics/palm.ics
+t/ics/palm_recur.ics
 t/ics/recur.ics
 t/ics/recurrence-id.ics
 t/pod-coverage.t

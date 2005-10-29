@@ -1,3 +1,7 @@
+0.64 - Wed Oct 12 13:59:39 BST 2005
+    * Split events() up into events() and collapse()
+    * Fix a bug with exploding floating events
+
 0.63 - Mon Oct 10 12:20:33 BST 2005
     * Added support for comma seperated (EX|R)DATES
     * Fix floating events - the way we were doing it before is wrong and there is now a floating() method
