@@ -6,7 +6,7 @@ use Data::ICal;
 use DateTime::Set;
 use DateTime::Format::ICal;
 
-our $VERSION = '0.64';
+our $VERSION = '0.65';
 
 # mmm, mixin goodness
 sub import {
@@ -562,11 +562,11 @@ sub summary {
 
     if ($summ) {
         delete $self->{properties}->{summary};
-        $self->add_property( summary => _escape($summ) );
+        $self->add_property( summary => $summ );
     }
 
     $summ = $self->property('summary') || return undef;
-    return _unescape($summ->[0]->value);
+    return $summ->[0]->value;
 }
 
 =head2 description
@@ -586,11 +586,11 @@ sub description {
 
     if ($desc) {
         delete $self->{properties}->{description};
-        $self->add_property( description => _escape($desc) );
+        $self->add_property( description => $desc );
     }
  
     $desc = $self->property('description') || return undef;
-    return _unescape($desc->[0]->value);
+    return $desc->[0]->value;
 
 }
 
