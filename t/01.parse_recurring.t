@@ -7,7 +7,8 @@ use DateTime::Set;
 use DateTime::TimeZone;
 
 my $cal;
-ok($cal = Data::ICal->new( filename => 't/ics/recur.ics'), "parse recur ics");
+ok($cal = Data::ICal->new( filename => 't/ics/recur.ics'), "parse recur ics")
+ or diag( $cal->error_message );
 
 my $date1 = DateTime->new( year => 2005, month => 6, day => 20 );
 my $date2 = DateTime->new( year => 2005, month => 6, day => 26, hour => 11, minute => 59 );

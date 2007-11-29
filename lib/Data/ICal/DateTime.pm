@@ -6,7 +6,7 @@ use Data::ICal;
 use DateTime::Set;
 use DateTime::Format::ICal;
 
-our $VERSION = '0.65';
+our $VERSION = '0.7';
 
 # mmm, mixin goodness
 sub import {
