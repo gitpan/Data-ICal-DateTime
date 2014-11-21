@@ -1,6 +1,6 @@
 use strict;
 
-use Test::More tests => 4;
+use Test::More tests => 18;
 use Data::ICal::DateTime;
 use DateTime;
 use DateTime::Set;
@@ -18,6 +18,14 @@ my @events = $cal->events;
 is (@events, 1, "1 total event");
 @events    = $cal->events($set);
 is (@events, 7, "7 recurring events");
+
+my $day = 20;
+for my $event (@events) {
+    is($event->start->iso8601, "2005-06-${day}T11:00:00");
+    is($event->start->time_zone_long_name, 'Europe/London');
+
+    $day++;
+}
 
 @events    = $cal->events($set,'minute');
 is (@events, 7*60, "420 split recurring events");

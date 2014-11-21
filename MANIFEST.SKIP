@@ -7,3 +7,5 @@ blib
 .cache
 benchmark
 ^ics\/
+.git
+\.bak$

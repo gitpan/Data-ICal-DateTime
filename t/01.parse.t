@@ -1,6 +1,6 @@
 use strict;
 
-use Test::More tests => 26;
+use Test::More tests => 27;
 
 
 use Data::ICal::DateTime;
@@ -10,7 +10,7 @@ use DateTime::TimeZone;
 
 # check the import stuff
 ok(Data::ICal->can('events'),"Events");
-for (qw(start end duration summary description recurrence explode is_in _normalise)) {
+for (qw(start end duration summary description url recurrence explode is_in _normalise)) {
     ok(Data::ICal::Entry::Event->can($_),"Can $_");
 }
 

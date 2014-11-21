@@ -1,3 +1,11 @@
+0.8  - Fri 21 Nov 2014 11:26:57 PST
+    * Update docs
+    * Fix some timezone bugs (Fixes RT 43610 and RT 99804 - thanks Sterling Hanenkamp)
+    * Refactor for more DRYness
+    * Add URL field
+    * Update Module::Install to add META.yml (fixes RT 80668)
+    * Add a note about all day events (RT 63049)
+
 0.7  - Thu 29 Nov 2007 16:45:39 GMT
     * Add VERSION to .ics files since new Data::ICal requires it
 
