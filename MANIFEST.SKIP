@@ -1,6 +1,7 @@
 try
 .tar.gz
-Makefile
+MYMETA\.
+^Makefile$
 Makefile.old
 .svn
 blib

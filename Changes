@@ -1,3 +1,7 @@
+0.81 - Mon 24 Nov 2014 10:11:50 PST
+    * Add Makefile.PL back into MANIFEST  (fixes RT 100524)
+    * Remove MYMETA.* files from MANIFEST (fixes RT 100525)
+
 0.8  - Fri 21 Nov 2014 11:26:57 PST
     * Update docs
     * Fix some timezone bugs (Fixes RT 43610 and RT 99804 - thanks Sterling Hanenkamp)
